@@ -8,7 +8,7 @@ A comprehensive PowerShell script to quickly provision a configured set of apps 
 
 ## Description
 
-This script provides a streamlined way to install multiple applications after a fresh Windows installation. It handles execution policy checks, supports interactive app selection, includes a WhatIf mode for testing, allows adding new apps to the tracking file, supports custom configuration files, and provides comprehensive logging capabilities.
+This script provides a streamlined way to install multiple applications after a fresh Windows installation. It supports interactive app selection, includes a WhatIf mode for testing, allows adding new apps to the tracking file, supports custom configuration files, and provides comprehensive logging capabilities.
 
 ### Features
 
@@ -18,9 +18,7 @@ This script provides a streamlined way to install multiple applications after a 
 - **Install and Track**: Install new apps and automatically add them to your tracking file
 - **Custom Configuration Files**: Specify alternative JSON files for different app sets
 - **Comprehensive Logging**: Log all operations to a file with timestamps
-- **JSON Configuration**: Easy-to-edit list of applications with automatic backup before modifications
-- **Execution Policy Management**: Automatically handles PowerShell execution policies with elevation
-- **Elevation Support**: Automatically requests administrator privileges if needed, preserving all parameters
+- **JSON Configuration**: Easy-to-edit list of applications
 - **Robust Error Handling**: Try-catch blocks with proper exit codes (0 = success, 1 = failure)
 - **First-Run Experience**: Interactive JSON file creation with example apps if file doesn't exist
 
@@ -29,7 +27,6 @@ This script provides a streamlined way to install multiple applications after a 
 - Windows 10/11
 - PowerShell 5.1 or later
 - Windows Package Manager (winget) installed
-- Administrator privileges (script will prompt if needed)
 
 ## Parameters
 
@@ -213,16 +210,10 @@ winget search <app-name>
 
 If `apps.json` doesn't exist when the script runs, it will offer to create one for you with example applications including:
 - Microsoft PowerShell
-- 7-Zip
 - Git
 - Visual Studio Code
-- .NET SDK 8, 9, and 10
-- Visual Studio 2022 Enterprise
-- SQL Server Management Studio
 
-### Automatic Backup
 
-When using the `-InstallAndTrack` parameter, the script automatically creates a timestamped backup of your apps.json file before making any modifications (e.g., `apps.json.backup.20260112_143052`).
 
 ## Output
 
@@ -244,8 +235,7 @@ When using the `-LogFile` parameter, all output is written to both the console a
 
 ## Notes
 
-- The script will automatically elevate to administrator if required
-- When relaunching as administrator, all parameters are preserved (including `-Interactive`, `-WhatIf`, `-InstallAndTrack`, `-AppsFile`, and `-LogFile`)
+- The script runs without elevation by default; individual app installers will request UAC when needed
 - Applications are installed with `--silent` flag to minimize user interaction
 - Package agreements and source agreements are automatically accepted
 - Relative paths for `-AppsFile` and `-LogFile` are resolved to absolute paths at script start
@@ -266,22 +256,16 @@ Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force
 
 **App not found error**: Verify the package ID using `winget search <app-name>` and update your JSON file with the correct ID.
 
-**Permission denied**: Ensure you're running as Administrator or allow the script to elevate when prompted.
-
 **JSON file not found**: If apps.json is missing on first run, the script will offer to create it for you. Choose 'Y' to create it with example apps, or 'N' to exit and create your own manually.
 
-**Empty log messages error**: Ensure you're using the latest version of the script which properly handles empty string logging.
+**Installation fails**: Individual installers may require administrator privileges and will prompt for UAC elevation when needed.
 
 ## Architecture
 
 The script is organized into modular functions:
 
-- `Test-IsAdministrator`: Check if running with admin privileges
-- `Get-ScriptDirectory`: Resolve script directory with fallback logic
-- `Write-Log`: Unified logging to console (with colors) and optional file
-- `Set-ExecutionPolicyIfNeeded`: Handle execution policy with elevation
 - `Get-AppsFromJson`: Load apps from JSON with first-run creation support
-- `Add-AppsToJson`: Add new apps to JSON with automatic backup
+- `Add-AppsToJson`: Add new apps to JSON, avoiding duplicates
 - `Install-AndTrackApps`: Install apps and track them in JSON
 - `Get-UserConfirmation`: Interactive app selection with Y/N/A prompts
 - `Install-WingetApps`: Install apps from list with progress reporting

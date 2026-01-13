@@ -1,3 +1,8 @@
+# TODO:
+# - Download surface selfhost center
+# - Support Edge extensions
+# - Open ABS tool
+
 <#
 .SYNOPSIS
     Automates installation of Windows applications using winget with configuration management.
@@ -12,7 +17,6 @@
     - Interactive mode for selective installation
     - Install and automatically track new apps to JSON
     - WhatIf mode for dry-run previews
-    - Automatic JSON backup before modifications
     - Full transcript logging support
 
 .PARAMETER Interactive
@@ -26,7 +30,7 @@
 .PARAMETER InstallAndTrack
     Installs specified applications and automatically adds them to the apps.json tracking file.
     Accepts one or more winget package IDs (e.g., "Git.Git", "Microsoft.PowerShell").
-    Creates backups before modifying JSON and avoids duplicates.
+    Avoids adding duplicates to the tracking file.
 
 .PARAMETER AppsFile
     Specifies a custom JSON file containing the list of applications to install.
@@ -102,45 +106,7 @@ param(
     [string]$LogFile
 )
 
-function Test-IsAdministrator {
-    <#
-    .SYNOPSIS
-    Checks if the current PowerShell session is running as Administrator.
-    #>
-    $currentUser = [Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()
-    return $currentUser.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
-}
 
-function Get-ScriptDirectory {
-    <#
-    .SYNOPSIS
-    Gets the directory where the script is located, with fallbacks for different execution contexts.
-    .OUTPUTS
-    String path to the script directory.
-    #>
-    if ($PSScriptRoot) {
-        return $PSScriptRoot
-    } elseif ($MyInvocation.MyCommand.Path) {
-        return Split-Path -Parent $MyInvocation.MyCommand.Path
-    } else {
-        return $PWD.Path
-    }
-}
-
-function Set-ExecutionPolicyIfNeeded {
-    <#
-    .SYNOPSIS
-    Checks the current execution policy and provides guidance if needed.
-    #>
-    $effectivePolicy = Get-ExecutionPolicy
-
-    if ($effectivePolicy -ne 'Unrestricted' -and $effectivePolicy -ne 'Bypass' -and $effectivePolicy -ne 'RemoteSigned') {
-        Write-Host "Current execution policy: $effectivePolicy" -ForegroundColor Yellow
-        Write-Host "Tip: Run with: powershell -ExecutionPolicy Bypass -File $($MyInvocation.MyCommand.Path)" -ForegroundColor Cyan
-    } else {
-        Write-Host "Execution policy is permissive ($effectivePolicy)" -ForegroundColor Green
-    }
-}
 
 function Get-AppsFromJson {
     <#
@@ -205,12 +171,8 @@ function Add-AppsToJson {
         [array]$NewApps
     )
 
-    # Create backup if file exists
+    # Load existing apps or start with empty array
     if (Test-Path $JsonPath) {
-        $backupPath = "$JsonPath.backup"
-        Copy-Item -Path $JsonPath -Destination $backupPath -Force
-        Write-Host "Created backup at: $backupPath" -ForegroundColor DarkGray
-        
         $appsConfig = Get-Content $JsonPath -Raw | ConvertFrom-Json
         $existingApps = @($appsConfig.apps)
     } else {
@@ -447,7 +409,6 @@ function Start-AppInstallation {
     )
 
     Write-Host "`nExecuting main script..." -ForegroundColor Cyan
-    Write-Host "Current execution policy: $(Get-ExecutionPolicy -Scope CurrentUser)"
     
     # Display mode
     $mode = @()
@@ -483,8 +444,6 @@ function Start-AppInstallation {
 
 # Main execution
 try {
-    Set-ExecutionPolicyIfNeeded
-
     # Setup transcript logging if LogFile parameter is provided
     if ($LogFile) {
         # Resolve to absolute path
@@ -510,8 +469,7 @@ try {
         }
         $jsonPath = $AppsFile
     } else {
-        $scriptPath = Get-ScriptDirectory
-        $jsonPath = Join-Path $scriptPath "apps.json"
+        $jsonPath = Join-Path $PSScriptRoot "apps.json"
     }
 
     if ($InstallAndTrack) {
