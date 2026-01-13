@@ -1,3 +1,90 @@
+<#
+.SYNOPSIS
+    Automates installation of Windows applications using winget with configuration management.
+
+.DESCRIPTION
+    Provision-WingetApps.ps1 provides a streamlined way to install and manage Windows applications 
+    using the Windows Package Manager (winget). It supports interactive mode, configuration tracking 
+    via JSON files, dry-run previews, and comprehensive logging.
+
+    Key features:
+    - Install apps from a JSON configuration file
+    - Interactive mode for selective installation
+    - Install and automatically track new apps to JSON
+    - WhatIf mode for dry-run previews
+    - Automatic JSON backup before modifications
+    - Full transcript logging support
+
+.PARAMETER Interactive
+    Prompts for confirmation before installing each application from the list.
+    Allows selective installation with Y (Yes), N (No), or A (All remaining) options.
+
+.PARAMETER WhatIf
+    Shows what would be installed without making any actual changes.
+    Useful for previewing installation plans or testing configurations.
+
+.PARAMETER InstallAndTrack
+    Installs specified applications and automatically adds them to the apps.json tracking file.
+    Accepts one or more winget package IDs (e.g., "Git.Git", "Microsoft.PowerShell").
+    Creates backups before modifying JSON and avoids duplicates.
+
+.PARAMETER AppsFile
+    Specifies a custom JSON file containing the list of applications to install.
+    If not provided, uses apps.json in the script's directory.
+    Supports both absolute and relative paths.
+
+.PARAMETER LogFile
+    Enables transcript logging to the specified file path.
+    Captures all console output including winget installation progress.
+    Supports both absolute and relative paths.
+    Automatically creates the log directory if it doesn't exist.
+
+.EXAMPLE
+    .\Provision-WingetApps.ps1
+    
+    Installs all applications listed in apps.json (in the script directory) silently.
+
+.EXAMPLE
+    .\Provision-WingetApps.ps1 -Interactive
+    
+    Prompts for confirmation before installing each app from apps.json.
+
+.EXAMPLE
+    .\Provision-WingetApps.ps1 -WhatIf
+    
+    Shows what applications would be installed without actually installing them.
+
+.EXAMPLE
+    .\Provision-WingetApps.ps1 -InstallAndTrack "Git.Git","Microsoft.PowerShell"
+    
+    Installs Git and PowerShell, then adds them to apps.json for tracking.
+
+.EXAMPLE
+    .\Provision-WingetApps.ps1 -AppsFile "C:\Config\my-apps.json"
+    
+    Installs apps from a custom JSON file instead of the default apps.json.
+
+.EXAMPLE
+    .\Provision-WingetApps.ps1 -LogFile "install.log"
+    
+    Installs apps and logs all output to install.log in the current directory.
+
+.EXAMPLE
+    .\Provision-WingetApps.ps1 -Interactive -WhatIf -LogFile "preview.log"
+    
+    Interactive preview mode with logging - see what would be installed and log the session.
+
+.NOTES
+    File Name      : Provision-WingetApps.ps1
+    Prerequisite   : Windows Package Manager (winget) must be installed
+    Requires       : PowerShell 5.1 or later
+    
+    The script runs without elevation by default. Individual app installers will request 
+    UAC elevation when needed. Some installers (like Spotify) require non-elevated context.
+
+.LINK
+    https://github.com/microsoft/winget-cli
+#>
 param(
     [Parameter(Mandatory = $false)]
     [switch]$Interactive,
@@ -14,9 +101,6 @@ param(
     [Parameter(Mandatory = $false)]
     [string]$LogFile
 )
-
-# Script-level variable for logging
-$script:LogFilePath = $null
 
 function Test-IsAdministrator {
     <#
@@ -43,110 +127,18 @@ function Get-ScriptDirectory {
     }
 }
 
-function Write-Log {
-    <#
-    .SYNOPSIS
-    Writes a message to both console and log file (if logging is enabled).
-    .PARAMETER Message
-    The message to write.
-    .PARAMETER Color
-    Optional foreground color for console output.
-    .PARAMETER NoNewline
-    If set, doesn't add a newline after the message.
-    #>
-    param(
-        [Parameter(Mandatory = $true)]
-        [string]$Message,
-
-        [Parameter(Mandatory = $false)]
-        [string]$Color,
-
-        [Parameter(Mandatory = $false)]
-        [switch]$NoNewline
-    )
-
-    # Write to console
-    if ($Color) {
-        if ($NoNewline) {
-            Write-Host $Message -ForegroundColor $Color -NoNewline
-        } else {
-            Write-Host $Message -ForegroundColor $Color
-        }
-    } else {
-        if ($NoNewline) {
-            Write-Host $Message -NoNewline
-        } else {
-            Write-Host $Message
-        }
-    }
-
-    # Write to log file if enabled
-    if ($script:LogFilePath) {
-        $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
-        "[$timestamp] $Message" | Out-File -FilePath $script:LogFilePath -Append -Encoding UTF8
-    }
-}
-
 function Set-ExecutionPolicyIfNeeded {
     <#
     .SYNOPSIS
-    Checks and sets the execution policy if it's not permissive enough.
+    Checks the current execution policy and provides guidance if needed.
     #>
     $effectivePolicy = Get-ExecutionPolicy
 
-    if ($effectivePolicy -ne 'Unrestricted' -and $effectivePolicy -ne 'Bypass') {
-        Write-Log "Current effective execution policy is: $effectivePolicy" -Color Yellow
-        Write-Log "Attempting to elevate and set to Unrestricted..." -Color Yellow
-        
-        $isAdmin = Test-IsAdministrator
-        
-        if (-not $isAdmin) {
-            # Not admin - relaunch as administrator
-            $scriptPath = $MyInvocation.MyCommand.Path
-            
-            # Build parameter string
-            $paramString = ""
-            if ($Interactive) { $paramString += "-Interactive " }
-            if ($WhatIf) { $paramString += "-WhatIf " }
-            if ($InstallAndTrack) { 
-                $paramString += "-InstallAndTrack "
-                foreach ($app in $InstallAndTrack) {
-                    $paramString += "`"$app`","
-                }
-                $paramString = $paramString.TrimEnd(',') + " "
-            }
-            if ($AppsFile) { $paramString += "-AppsFile `"$AppsFile`" " }
-            if ($LogFile) { $paramString += "-LogFile `"$LogFile`" " }
-            
-            Start-Process powershell.exe -Verb RunAs -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$scriptPath`" $paramString"
-            exit 0
-        }
-        
-        # Running as admin - set execution policy at the highest available scope
-        try {
-            # Try LocalMachine scope first (requires admin)
-            Set-ExecutionPolicy -ExecutionPolicy Unrestricted -Scope LocalMachine -Force -ErrorAction Stop
-            Write-Log "Execution policy set to Unrestricted at LocalMachine scope!" -Color Green
-        }
-        catch {
-            # If LocalMachine fails, try Process scope as fallback
-            try {
-                Set-ExecutionPolicy -ExecutionPolicy Unrestricted -Scope Process -Force -ErrorAction Stop
-                Write-Log "Execution policy set to Unrestricted for current process" -Color Yellow
-                Write-Log "Note: This setting will only last for this PowerShell session" -Color Yellow
-            }
-            catch {
-                Write-Log "Could not set execution policy: $_" -Color Yellow
-                Write-Log "Continuing with current policy (script launched with Bypass)..." -Color Cyan
-            }
-        }
-        
-        # Verify the effective policy
-        $newPolicy = Get-ExecutionPolicy
-        Write-Log "Current effective policy is now: $newPolicy" -Color Cyan
-    }
-    else {
-        Write-Log "Execution policy is already permissive ($effectivePolicy)" -Color Green
+    if ($effectivePolicy -ne 'Unrestricted' -and $effectivePolicy -ne 'Bypass' -and $effectivePolicy -ne 'RemoteSigned') {
+        Write-Host "Current execution policy: $effectivePolicy" -ForegroundColor Yellow
+        Write-Host "Tip: Run with: powershell -ExecutionPolicy Bypass -File $($MyInvocation.MyCommand.Path)" -ForegroundColor Cyan
+    } else {
+        Write-Host "Execution policy is permissive ($effectivePolicy)" -ForegroundColor Green
     }
 }
 
@@ -165,9 +157,9 @@ function Get-AppsFromJson {
     )
 
     if (-not (Test-Path $JsonPath)) {
-        Write-Log "Error: JSON file not found at: $JsonPath" -Color Red
-        Write-Log " " 
-        Write-Log "Would you like to create a new apps.json file with example apps? (Y/N)" -Color Yellow
+        Write-Host "Error: JSON file not found at: $JsonPath" -ForegroundColor Red
+        Write-Host " " 
+        Write-Host "Would you like to create a new apps.json file with example apps? (Y/N)" -ForegroundColor Yellow
         $response = Read-Host
         
         if ($response -ieq 'Y') {
@@ -180,8 +172,8 @@ function Get-AppsFromJson {
             }
             
             $exampleConfig | ConvertTo-Json -Depth 10 | Set-Content $JsonPath -Encoding UTF8
-            Write-Log "Created example apps.json at: $JsonPath" -Color Green
-            Write-Log "Please edit this file to add your desired applications, then run the script again." -Color Cyan
+            Write-Host "Created example apps.json at: $JsonPath" -ForegroundColor Green
+            Write-Host "Please edit this file to add your desired applications, then run the script again." -ForegroundColor Cyan
             exit 0
         } else {
             throw "Configuration file not found"
@@ -191,7 +183,7 @@ function Get-AppsFromJson {
     $appsConfig = Get-Content $JsonPath -Raw | ConvertFrom-Json
     $apps = @($appsConfig.apps | ForEach-Object { $_.ToString() })
 
-    Write-Log "Loaded $($apps.Count) apps from $JsonPath" -Color Cyan
+    Write-Host "Loaded $($apps.Count) apps from $JsonPath" -ForegroundColor Cyan
     
     return $apps
 }
@@ -217,7 +209,7 @@ function Add-AppsToJson {
     if (Test-Path $JsonPath) {
         $backupPath = "$JsonPath.backup"
         Copy-Item -Path $JsonPath -Destination $backupPath -Force
-        Write-Log "Created backup at: $backupPath" -Color DarkGray
+        Write-Host "Created backup at: $backupPath" -ForegroundColor DarkGray
         
         $appsConfig = Get-Content $JsonPath -Raw | ConvertFrom-Json
         $existingApps = @($appsConfig.apps)
@@ -247,16 +239,16 @@ function Add-AppsToJson {
 
     # Report results
     if ($added.Count -gt 0) {
-        Write-Log ("`nAdded $($added.Count) app(s) to " + $JsonPath + ":") -Color Green
+        Write-Host "`nAdded $($added.Count) app(s) to $JsonPath`:" -ForegroundColor Green
         foreach ($app in $added) {
-            Write-Log "  + $app" -Color Green
+            Write-Host "  + $app" -ForegroundColor Green
         }
     }
     
     if ($skipped.Count -gt 0) {
-        Write-Log "`nSkipped $($skipped.Count) app(s) (already in list):" -Color Yellow
+        Write-Host "`nSkipped $($skipped.Count) app(s) (already in list):" -ForegroundColor Yellow
         foreach ($app in $skipped) {
-            Write-Log "  - $app" -Color Yellow
+            Write-Host "  - $app" -ForegroundColor Yellow
         }
     }
 }
@@ -283,30 +275,30 @@ function Install-AndTrackApps {
         [switch]$WhatIf
     )
 
-    Write-Log "`n=== Install and Track Apps ===" -Color Yellow
-    Write-Log ("Apps to install and add to tracking: $($Apps.Count)`n") -Color Cyan
+    Write-Host "`n=== Install and Track Apps ===" -ForegroundColor Yellow
+    Write-Host "Apps to install and add to tracking: $($Apps.Count)`n" -ForegroundColor Cyan
 
     if ($WhatIf) {
-        Write-Log "WhatIf: Would install the following apps:" -Color Magenta
+        Write-Host "WhatIf: Would install the following apps:" -ForegroundColor Magenta
         foreach ($app in $Apps) {
-            Write-Log "  WhatIf: Would install $app" -Color Magenta
+            Write-Host "  WhatIf: Would install $app" -ForegroundColor Magenta
         }
-        Write-Log "`nWhatIf: Would add these apps to apps.json" -Color Magenta
+        Write-Host "`nWhatIf: Would add these apps to apps.json" -ForegroundColor Magenta
     } else {
         # Install each app
         $successful = @()
         $failed = @()
 
         foreach ($app in $Apps) {
-            Write-Log "Installing $app..." -Color Cyan
+            Write-Host "Installing $app..." -ForegroundColor Cyan
             winget install --id $app --silent --accept-package-agreements --accept-source-agreements | Out-Null
             
             if ($LASTEXITCODE -eq 0) {
                 $successful += $app
-                Write-Log "  ✓ Successfully installed $app" -Color Green
+                Write-Host "  ✓ Successfully installed $app" -ForegroundColor Green
             } else {
                 $failed += $app
-                Write-Log "  ✗ Failed to install $app" -Color Red
+                Write-Host "  ✗ Failed to install $app" -ForegroundColor Red
             }
         }
 
@@ -316,11 +308,11 @@ function Install-AndTrackApps {
         }
 
         # Report results
-        Write-Log "`n=== Installation Summary ===" -Color Yellow
-        Write-Log "Successful: $($successful.Count)" -Color Green
+        Write-Host "`n=== Installation Summary ===" -ForegroundColor Yellow
+        Write-Host "Successful: $($successful.Count)" -ForegroundColor Green
         if ($failed.Count -gt 0) {
-            Write-Log "Failed: $($failed.Count)" -Color Red
-            Write-Log "Failed apps were not added to tracking file." -Color Yellow
+            Write-Host "Failed: $($failed.Count)" -ForegroundColor Red
+            Write-Host "Failed apps were not added to tracking file." -ForegroundColor Yellow
         }
     }
 }
@@ -339,9 +331,9 @@ function Get-UserConfirmation {
         [array]$Apps
     )
 
-    Write-Log "`n=== Interactive App Selection ===" -Color Yellow
-    Write-Log "Please confirm which apps you want to install." -Color Cyan
-    Write-Log "Press 'Y' for Yes, 'N' for No, or 'A' to install All remaining apps.`n" -Color Cyan
+    Write-Host "`n=== Interactive App Selection ===" -ForegroundColor Yellow
+    Write-Host "Please confirm which apps you want to install." -ForegroundColor Cyan
+    Write-Host "Press 'Y' for Yes, 'N' for No, or 'A' to install All remaining apps.`n" -ForegroundColor Cyan
 
     $confirmedApps = @()
     $installAll = $false
@@ -351,7 +343,7 @@ function Get-UserConfirmation {
         
         if ($installAll) {
             $confirmedApps += $app
-            Write-Log "[$($i + 1)/$($Apps.Count)] $app - Auto-confirmed (All)" -Color Green
+            Write-Host "[$($i + 1)/$($Apps.Count)] $app - Auto-confirmed (All)" -ForegroundColor Green
             continue
         }
 
@@ -362,33 +354,33 @@ function Get-UserConfirmation {
             
             if ($response -ieq 'Y') {
                 $confirmedApps += $app
-                Write-Log "  Confirmed" -Color Green
+                Write-Host "  Confirmed" -ForegroundColor Green
                 $validInput = $true
             }
             elseif ($response -ieq 'N') {
-                Write-Log "  Skipped" -Color Yellow
+                Write-Host "  Skipped" -ForegroundColor Yellow
                 $validInput = $true
             }
             elseif ($response -ieq 'A') {
                 $confirmedApps += $app
                 $installAll = $true
-                Write-Log "  Installing this and all remaining apps" -Color Green
+                Write-Host "  Installing this and all remaining apps" -ForegroundColor Green
                 $validInput = $true
             }
             else {
-                Write-Log "  Invalid input. Please enter Y, N, or A." -Color Red
+                Write-Host "  Invalid input. Please enter Y, N, or A." -ForegroundColor Red
                 $validInput = $false
             }
         } while (-not $validInput)
     }
 
-    Write-Log "`n=== Confirmation Complete ===" -Color Yellow
-    Write-Log "Apps to install: $($confirmedApps.Count) of $($Apps.Count)" -Color Cyan
+    Write-Host "`n=== Confirmation Complete ===" -ForegroundColor Yellow
+    Write-Host "Apps to install: $($confirmedApps.Count) of $($Apps.Count)" -ForegroundColor Cyan
     
     if ($confirmedApps.Count -gt 0) {
-        Write-Log "Selected apps:" -Color Cyan
+        Write-Host "Selected apps:" -ForegroundColor Cyan
         foreach ($app in $confirmedApps) {
-            Write-Log "  - $app" -Color White
+            Write-Host "  - $app" -ForegroundColor White
         }
     }
 
@@ -413,20 +405,20 @@ function Install-WingetApps {
     )
 
     if ($Apps.Count -eq 0) {
-        Write-Log "No apps to install." -Color Yellow
+        Write-Host "No apps to install." -ForegroundColor Yellow
         return
     }
 
     if ($WhatIf) {
-        Write-Log "=== WhatIf Mode: Showing what would be installed ===" -Color Magenta
+        Write-Host "=== WhatIf Mode: Showing what would be installed ===" -ForegroundColor Magenta
         foreach ($app in $Apps) {
-            Write-Log "WhatIf: Would install $app" -Color Magenta
+            Write-Host "WhatIf: Would install $app" -ForegroundColor Magenta
         }
-        Write-Log "`nTotal apps that would be installed: $($Apps.Count)" -Color Magenta
+        Write-Host "`nTotal apps that would be installed: $($Apps.Count)" -ForegroundColor Magenta
     } else {
-        Write-Log "=== Starting Installation ===" -Color Yellow
+        Write-Host "=== Starting Installation ===" -ForegroundColor Yellow
         foreach ($app in $Apps) {
-            Write-Log "Installing $app..." -Color Cyan
+            Write-Host "Installing $app..." -ForegroundColor Cyan
             winget install --id $app --silent --accept-package-agreements --accept-source-agreements
         }
     }
@@ -454,8 +446,8 @@ function Start-AppInstallation {
         [switch]$WhatIf
     )
 
-    Write-Log "`nExecuting main script..." -Color Cyan
-    Write-Log "Current execution policy: $(Get-ExecutionPolicy -Scope CurrentUser)"
+    Write-Host "`nExecuting main script..." -ForegroundColor Cyan
+    Write-Host "Current execution policy: $(Get-ExecutionPolicy -Scope CurrentUser)"
     
     # Display mode
     $mode = @()
@@ -463,7 +455,7 @@ function Start-AppInstallation {
     if ($Interactive) { $mode += "Interactive" }
     if ($mode.Count -eq 0) { $mode += "Silent" }
     
-    Write-Log "Mode: $($mode -join ', ')" -Color Cyan
+    Write-Host "Mode: $($mode -join ', ')" -ForegroundColor Cyan
 
     try {
         # Load apps from JSON
@@ -478,13 +470,13 @@ function Start-AppInstallation {
         Install-WingetApps -Apps $apps -WhatIf:$WhatIf
 
         if ($WhatIf) {
-            Write-Log "`nWhatIf: Script completed (no actual changes made)!" -Color Magenta
+            Write-Host "`nWhatIf: Script completed (no actual changes made)!" -ForegroundColor Magenta
         } else {
-            Write-Log "`nScript completed successfully!" -Color Green
+            Write-Host "`nScript completed successfully!" -ForegroundColor Green
         }
     }
     catch {
-        Write-Log "`nScript failed: $_" -Color Red
+        Write-Host "`nScript failed: $_" -ForegroundColor Red
         throw
     }
 }
@@ -493,13 +485,12 @@ function Start-AppInstallation {
 try {
     Set-ExecutionPolicyIfNeeded
 
-    # Setup logging if LogFile parameter is provided
+    # Setup transcript logging if LogFile parameter is provided
     if ($LogFile) {
         # Resolve to absolute path
         if (-not [System.IO.Path]::IsPathRooted($LogFile)) {
             $LogFile = Join-Path $PWD $LogFile
         }
-        $script:LogFilePath = $LogFile
         
         # Create log file directory if it doesn't exist
         $logDir = Split-Path -Parent $LogFile
@@ -507,9 +498,8 @@ try {
             New-Item -ItemType Directory -Path $logDir -Force | Out-Null
         }
         
-        $startTime = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'
-        Write-Log "=== Script execution started at $startTime ===" -Color Cyan
-        Write-Log "Log file: $LogFile" -Color Cyan
+        Start-Transcript -Path $LogFile -Append
+        Write-Host "=== Script execution started at $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') ===" -ForegroundColor Cyan
     }
 
     # Resolve JSON file path to absolute path
@@ -532,24 +522,22 @@ try {
         Start-AppInstallation -Interactive:$Interactive -JsonPath $jsonPath -WhatIf:$WhatIf
     }
 
-    if ($script:LogFilePath) {
-        $endTime = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'
-        Write-Log "=== Script execution completed successfully at $($endTime) ===" -Color Cyan
+    if ($LogFile) {
+        Write-Host "=== Script execution completed successfully at $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') ===" -ForegroundColor Cyan
+        Stop-Transcript
     }
     
-    pause
     exit 0
 }
 catch {
-    Write-Log "`n=== FATAL ERROR ===" -Color Red
-    Write-Log "Error: $_" -Color Red
-    Write-Log "Stack Trace: $($_.ScriptStackTrace)" -Color Red
+    Write-Host "`n=== FATAL ERROR ===" -ForegroundColor Red
+    Write-Host "Error: $_" -ForegroundColor Red
+    Write-Host "Stack Trace: $($_.ScriptStackTrace)" -ForegroundColor Red
     
-    if ($script:LogFilePath) {
-        $timestamp = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'
-        Write-Log "=== Script execution failed at $($timestamp) ===" -Color Red
+    if ($LogFile) {
+        Write-Host "=== Script execution failed at $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') ===" -ForegroundColor Red
+        Stop-Transcript
     }
     
-    pause
     exit 1
 }
