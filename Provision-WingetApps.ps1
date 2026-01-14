@@ -172,11 +172,10 @@ function Add-AppsToJson {
     )
 
     # Load existing apps or start with empty array
-    if (Test-Path $JsonPath) {
-        $appsConfig = Get-Content $JsonPath -Raw | ConvertFrom-Json
-        $existingApps = @($appsConfig.apps)
-    } else {
-        $existingApps = @()
+    $existingApps = if (Test-Path $JsonPath) { 
+        @((Get-Content $JsonPath -Raw | ConvertFrom-Json).apps)
+    } else { 
+        @() 
     }
 
     # Add new apps, avoiding duplicates
@@ -193,11 +192,7 @@ function Add-AppsToJson {
     }
 
     # Save updated JSON
-    $updatedConfig = @{
-        apps = $existingApps
-    }
-    
-    $updatedConfig | ConvertTo-Json -Depth 10 | Set-Content $JsonPath -Encoding UTF8
+    @{ apps = $existingApps } | ConvertTo-Json -Depth 10 | Set-Content $JsonPath -Encoding UTF8
 
     # Report results
     if ($added.Count -gt 0) {
@@ -240,44 +235,23 @@ function Install-AndTrackApps {
     Write-Host "`n=== Install and Track Apps ===" -ForegroundColor Yellow
     Write-Host "Apps to install and add to tracking: $($Apps.Count)`n" -ForegroundColor Cyan
 
-    # Install each app
-    $successful = @()
-    $failed = @()
-
-    foreach ($app in $Apps) {
-        Write-Host "Installing $app..." -ForegroundColor Cyan
-        
+    # Add apps to JSON first, before attempting installation
+    if ($Apps.Count -gt 0) {
         if (-not $WhatIf) {
-            winget install --id $app --silent --accept-package-agreements --accept-source-agreements | Out-Null
-            
-            if ($LASTEXITCODE -eq 0) {
-                $successful += $app
-                Write-Host "  ✓ Successfully installed $app" -ForegroundColor Green
-            } else {
-                $failed += $app
-                Write-Host "  ✗ Failed to install $app" -ForegroundColor Red
-            }
+            Add-AppsToJson -JsonPath $JsonPath -NewApps $Apps
         } else {
-            Write-Host "  WhatIf: Would install $app" -ForegroundColor Magenta
-            $successful += $app
+            Write-Host "WhatIf: Would add $($Apps.Count) app(s) to $JsonPath`n" -ForegroundColor Magenta
         }
     }
 
-    # Add successful installations to JSON
-    if ($successful.Count -gt 0) {
-        if (-not $WhatIf) {
-            Add-AppsToJson -JsonPath $JsonPath -NewApps $successful
-        } else {
-            Write-Host "`nWhatIf: Would add $($successful.Count) app(s) to $JsonPath" -ForegroundColor Magenta
-        }
-    }
+    # Install apps using the shared installation function
+    $result = Install-WingetApps -Apps $Apps -WhatIf:$WhatIf
 
     # Report results
     Write-Host "`n=== Installation Summary ===" -ForegroundColor Yellow
-    Write-Host "Successful: $($successful.Count)" -ForegroundColor Green
-    if ($failed.Count -gt 0) {
-        Write-Host "Failed: $($failed.Count)" -ForegroundColor Red
-        Write-Host "Failed apps were not added to tracking file." -ForegroundColor Yellow
+    Write-Host "Successful: $($result.Successful.Count)" -ForegroundColor Green
+    if ($result.Failed.Count -gt 0) {
+        Write-Host "Failed: $($result.Failed.Count)" -ForegroundColor Red
     }
 }
 
@@ -359,6 +333,8 @@ function Install-WingetApps {
     Array of app IDs to install.
     .PARAMETER WhatIf
     If set, shows what would be installed without actually installing.
+    .OUTPUTS
+    Hashtable with 'Successful' and 'Failed' arrays of app IDs.
     #>
     param(
         [Parameter(Mandatory = $true)]
@@ -368,24 +344,38 @@ function Install-WingetApps {
         [switch]$WhatIf
     )
 
+    $successful = @()
+    $failed = @()
+
     if ($Apps.Count -eq 0) {
         Write-Host "No apps to install." -ForegroundColor Yellow
-        return
+        return @{ Successful = $successful; Failed = $failed }
     }
 
     if ($WhatIf) {
-        Write-Host "=== WhatIf Mode: Showing what would be installed ===" -ForegroundColor Magenta
+        Write-Host "`n=== WhatIf Mode: Showing what would be installed ===" -ForegroundColor Magenta
         foreach ($app in $Apps) {
             Write-Host "WhatIf: Would install $app" -ForegroundColor Magenta
+            $successful += $app
         }
         Write-Host "`nTotal apps that would be installed: $($Apps.Count)" -ForegroundColor Magenta
     } else {
-        Write-Host "=== Starting Installation ===" -ForegroundColor Yellow
+        Write-Host "`n=== Starting Installation ===" -ForegroundColor Yellow
         foreach ($app in $Apps) {
-            Write-Host "Installing $app..." -ForegroundColor Cyan
-            winget install --id $app --silent --accept-package-agreements --accept-source-agreements
+            Write-Host "`nInstalling $app..." -ForegroundColor Cyan
+            winget install --id $app --silent --accept-package-agreements --accept-source-agreements | Out-Null
+            
+            if ($LASTEXITCODE -eq 0) {
+                $successful += $app
+                Write-Host "  ✓ Successfully installed $app" -ForegroundColor Green
+            } else {
+                $failed += $app
+                Write-Host "  ✗ Failed to install $app" -ForegroundColor Red
+            }
         }
     }
+
+    return @{ Successful = $successful; Failed = $failed }
 }
 
 function Start-AppInstallation {
@@ -430,12 +420,15 @@ function Start-AppInstallation {
         }
 
         # Install apps
-        Install-WingetApps -Apps $apps -WhatIf:$WhatIf
+        $result = Install-WingetApps -Apps $apps -WhatIf:$WhatIf
 
         if ($WhatIf) {
             Write-Host "`nWhatIf: Script completed (no actual changes made)!" -ForegroundColor Magenta
         } else {
             Write-Host "`nScript completed successfully!" -ForegroundColor Green
+            if ($result.Failed.Count -gt 0) {
+                Write-Host "Note: $($result.Failed.Count) app(s) failed to install." -ForegroundColor Yellow
+            }
         }
     }
     catch {
@@ -448,30 +441,24 @@ function Start-AppInstallation {
 try {
     # Setup transcript logging if LogFile parameter is provided
     if ($LogFile) {
-        # Resolve to absolute path
         if (-not [System.IO.Path]::IsPathRooted($LogFile)) {
             $LogFile = Join-Path $PWD $LogFile
         }
         
-        # Create log file directory if it doesn't exist
         $logDir = Split-Path -Parent $LogFile
         if ($logDir -and -not (Test-Path $logDir)) {
             New-Item -ItemType Directory -Path $logDir -Force | Out-Null
         }
         
         Start-Transcript -Path $LogFile -Append
-        Write-Host "=== Script execution started ===" -ForegroundColor Cyan
+        Write-Host "`n=== Script execution started ===" -ForegroundColor Cyan
     }
 
-    # Resolve JSON file path to absolute path
-    if ($AppsFile) {
-        # Convert relative path to absolute
-        if (-not [System.IO.Path]::IsPathRooted($AppsFile)) {
-            $AppsFile = Join-Path $PWD $AppsFile
-        }
-        $jsonPath = $AppsFile
-    } else {
-        $jsonPath = Join-Path $PSScriptRoot "apps.json"
+    # Resolve JSON file path
+    $jsonPath = if ($AppsFile) { 
+        if ([System.IO.Path]::IsPathRooted($AppsFile)) { $AppsFile } else { Join-Path $PWD $AppsFile }
+    } else { 
+        Join-Path $PSScriptRoot "apps.json" 
     }
 
     if ($InstallAndTrack) {
@@ -483,7 +470,7 @@ try {
     }
 
     if ($LogFile) {
-        Write-Host "=== Script execution completed successfully ===" -ForegroundColor Cyan
+        Write-Host "`n=== Script execution completed successfully ===" -ForegroundColor Cyan
         Stop-Transcript
     }
     
@@ -495,7 +482,7 @@ catch {
     Write-Host "Stack Trace: $($_.ScriptStackTrace)" -ForegroundColor Red
     
     if ($LogFile) {
-        Write-Host "=== Script execution failed ===" -ForegroundColor Red
+        Write-Host "`n=== Script execution failed ===" -ForegroundColor Red
         Stop-Transcript
     }
     
