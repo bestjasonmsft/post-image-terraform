@@ -1,4 +1,4 @@
-# TODO:
+﻿# TODO:
 # - Download surface selfhost center
 # - Support Edge extensions
 # - Open ABS tool
@@ -240,19 +240,14 @@ function Install-AndTrackApps {
     Write-Host "`n=== Install and Track Apps ===" -ForegroundColor Yellow
     Write-Host "Apps to install and add to tracking: $($Apps.Count)`n" -ForegroundColor Cyan
 
-    if ($WhatIf) {
-        Write-Host "WhatIf: Would install the following apps:" -ForegroundColor Magenta
-        foreach ($app in $Apps) {
-            Write-Host "  WhatIf: Would install $app" -ForegroundColor Magenta
-        }
-        Write-Host "`nWhatIf: Would add these apps to apps.json" -ForegroundColor Magenta
-    } else {
-        # Install each app
-        $successful = @()
-        $failed = @()
+    # Install each app
+    $successful = @()
+    $failed = @()
 
-        foreach ($app in $Apps) {
-            Write-Host "Installing $app..." -ForegroundColor Cyan
+    foreach ($app in $Apps) {
+        Write-Host "Installing $app..." -ForegroundColor Cyan
+        
+        if (-not $WhatIf) {
             winget install --id $app --silent --accept-package-agreements --accept-source-agreements | Out-Null
             
             if ($LASTEXITCODE -eq 0) {
@@ -262,20 +257,27 @@ function Install-AndTrackApps {
                 $failed += $app
                 Write-Host "  ✗ Failed to install $app" -ForegroundColor Red
             }
+        } else {
+            Write-Host "  WhatIf: Would install $app" -ForegroundColor Magenta
+            $successful += $app
         }
+    }
 
-        # Add successful installations to JSON
-        if ($successful.Count -gt 0) {
+    # Add successful installations to JSON
+    if ($successful.Count -gt 0) {
+        if (-not $WhatIf) {
             Add-AppsToJson -JsonPath $JsonPath -NewApps $successful
+        } else {
+            Write-Host "`nWhatIf: Would add $($successful.Count) app(s) to $JsonPath" -ForegroundColor Magenta
         }
+    }
 
-        # Report results
-        Write-Host "`n=== Installation Summary ===" -ForegroundColor Yellow
-        Write-Host "Successful: $($successful.Count)" -ForegroundColor Green
-        if ($failed.Count -gt 0) {
-            Write-Host "Failed: $($failed.Count)" -ForegroundColor Red
-            Write-Host "Failed apps were not added to tracking file." -ForegroundColor Yellow
-        }
+    # Report results
+    Write-Host "`n=== Installation Summary ===" -ForegroundColor Yellow
+    Write-Host "Successful: $($successful.Count)" -ForegroundColor Green
+    if ($failed.Count -gt 0) {
+        Write-Host "Failed: $($failed.Count)" -ForegroundColor Red
+        Write-Host "Failed apps were not added to tracking file." -ForegroundColor Yellow
     }
 }
 
@@ -458,7 +460,7 @@ try {
         }
         
         Start-Transcript -Path $LogFile -Append
-        Write-Host "=== Script execution started at $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') ===" -ForegroundColor Cyan
+        Write-Host "=== Script execution started ===" -ForegroundColor Cyan
     }
 
     # Resolve JSON file path to absolute path
@@ -481,7 +483,7 @@ try {
     }
 
     if ($LogFile) {
-        Write-Host "=== Script execution completed successfully at $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') ===" -ForegroundColor Cyan
+        Write-Host "=== Script execution completed successfully ===" -ForegroundColor Cyan
         Stop-Transcript
     }
     
@@ -493,7 +495,7 @@ catch {
     Write-Host "Stack Trace: $($_.ScriptStackTrace)" -ForegroundColor Red
     
     if ($LogFile) {
-        Write-Host "=== Script execution failed at $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') ===" -ForegroundColor Red
+        Write-Host "=== Script execution failed ===" -ForegroundColor Red
         Stop-Transcript
     }
     
