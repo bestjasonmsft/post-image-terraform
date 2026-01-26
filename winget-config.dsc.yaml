@@ -1,0 +1,93 @@
+# yaml-language-server: $schema=https://aka.ms/configuration-dsc-schema/0.2
+properties:
+  configurationVersion: 0.2.0
+  resources:
+    - resource: Microsoft.WinGet.DSC/WinGetPackage
+      id: powershell
+      directives:
+        description: Install PowerShell
+        allowPrerelease: false
+      settings:
+        id: Microsoft.PowerShell
+        source: winget
+
+    - resource: Microsoft.WinGet.DSC/WinGetPackage
+      id: 7zip
+      directives:
+        description: Install 7-Zip
+        allowPrerelease: false
+      settings:
+        id: 7zip.7zip
+        source: winget
+
+    - resource: Microsoft.WinGet.DSC/WinGetPackage
+      id: git
+      directives:
+        description: Install Git
+        allowPrerelease: false
+      settings:
+        id: Git.Git
+        source: winget
+
+    - resource: Microsoft.WinGet.DSC/WinGetPackage
+      id: sublimetext
+      directives:
+        description: Install Sublime Text 4
+        allowPrerelease: false
+      settings:
+        id: SublimeHQ.SublimeText.4
+        source: winget
+
+    - resource: Microsoft.WinGet.DSC/WinGetPackage
+      id: dotnetsdk10
+      directives:
+        description: Install .NET SDK 10
+        allowPrerelease: false
+      settings:
+        id: Microsoft.DotNet.SDK.10
+        source: winget
+
+    - resource: Microsoft.WinGet.DSC/WinGetPackage
+      id: dotnetsdk9
+      directives:
+        description: Install .NET SDK 9
+        allowPrerelease: false
+      settings:
+        id: Microsoft.DotNet.SDK.9
+        source: winget
+
+    - resource: Microsoft.WinGet.DSC/WinGetPackage
+      id: dotnetsdk8
+      directives:
+        description: Install .NET SDK 8
+        allowPrerelease: false
+      settings:
+        id: Microsoft.DotNet.SDK.8
+        source: winget
+
+    - resource: Microsoft.WinGet.DSC/WinGetPackage
+      id: vscode
+      directives:
+        description: Install Visual Studio Code
+        allowPrerelease: false
+      settings:
+        id: Microsoft.VisualStudioCode
+        source: winget
+
+    - resource: Microsoft.WinGet.DSC/WinGetPackage
+      id: visualstudio2022
+      directives:
+        description: Install Visual Studio 2022 Enterprise
+        allowPrerelease: false
+      settings:
+        id: Microsoft.VisualStudio.2022.Enterprise
+        source: winget
+
+    - resource: Microsoft.WinGet.DSC/WinGetPackage
+      id: ssms
+      directives:
+        description: Install SQL Server Management Studio 22
+        allowPrerelease: false
+      settings:
+        id: Microsoft.SQLServerManagementStudio.22
+        source: winget
