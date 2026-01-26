@@ -89,7 +89,7 @@ properties:
         description: Install Visual Studio 2026 Enterprise
         allowPrerelease: false
       settings:
-        id: Microsoft.VisualStudio.2026.Enterprise
+        id: Microsoft.VisualStudio.Enterprise
         source: winget
 
     - resource: Microsoft.WinGet.DSC/WinGetPackage
