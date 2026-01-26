@@ -46,7 +46,7 @@
       "enabled": true
     },
     {
-      "id": "Microsoft.VisualStudio.2026.Enterprise",
+      "id": "Microsoft.VisualStudio.Enterprise",
       "name": "Visual Studio 2026 Enterprise",
       "enabled": true
     },
