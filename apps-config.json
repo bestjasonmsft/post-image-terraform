@@ -41,8 +41,13 @@
       "enabled": true
     },
     {
-      "id": "Microsoft.VisualStudio.2022.Enterprise",
-      "name": "Visual Studio 2022 Enterprise",
+      "id": "GitHub.Copilot",
+      "name": "GitHub Copilot",
+      "enabled": true
+    },
+    {
+      "id": "Microsoft.VisualStudio.2026.Enterprise",
+      "name": "Visual Studio 2026 Enterprise",
       "enabled": true
     },
     {

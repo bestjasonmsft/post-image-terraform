@@ -75,12 +75,21 @@ properties:
         source: winget
 
     - resource: Microsoft.WinGet.DSC/WinGetPackage
-      id: visualstudio2022
+      id: githubcopilot
       directives:
-        description: Install Visual Studio 2022 Enterprise
+        description: Install GitHub Copilot
         allowPrerelease: false
       settings:
-        id: Microsoft.VisualStudio.2022.Enterprise
+        id: GitHub.Copilot
+        source: winget
+
+    - resource: Microsoft.WinGet.DSC/WinGetPackage
+      id: visualstudio2026
+      directives:
+        description: Install Visual Studio 2026 Enterprise
+        allowPrerelease: false
+      settings:
+        id: Microsoft.VisualStudio.2026.Enterprise
         source: winget
 
     - resource: Microsoft.WinGet.DSC/WinGetPackage
