@@ -1,3 +1,7 @@
+param(
+    [string]$ConfigFile = "apps-config.json"
+)
+
 # Check the effective execution policy
 $effectivePolicy = Get-ExecutionPolicy
 
@@ -46,23 +50,66 @@ Write-Host "`nExecuting main script..." -ForegroundColor Cyan
 
 Write-Host "Current execution policy: $(Get-ExecutionPolicy -Scope CurrentUser)"
 
-# List of apps to install
-$apps = @(
-    "Microsoft.PowerShell",
-    "7zip.7zip",
-    "Git.Git",
-    "SublimeHQ.SublimeText.4",
-    "Microsoft.DotNet.SDK.10",
-    "Microsoft.DotNet.SDK.9",
-    "Microsoft.DotNet.SDK.8",
-    "Microsoft.VisualStudioCode",
-    "Microsoft.VisualStudio.2022.Enterprise",
-    "Microsoft.SQLServerManagementStudio.22"
-)
+# Read and parse the configuration file
+$scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+$configPath = Join-Path -Path $scriptDir -ChildPath $ConfigFile
 
-# Install each app silently
-foreach ($app in $apps) {
-    winget install --id $app --silent --accept-package-agreements --accept-source-agreements
+Write-Host "`nLoading configuration from: $configPath" -ForegroundColor Cyan
+
+# Check if config file exists
+if (-not (Test-Path -Path $configPath)) {
+    Write-Host "ERROR: Configuration file not found: $configPath" -ForegroundColor Red
+    Write-Host "Please ensure the configuration file exists or specify a different file using the -ConfigFile parameter." -ForegroundColor Yellow
+    pause
+    exit 1
+}
+
+# Read and parse JSON
+try {
+    $configContent = Get-Content -Path $configPath -Raw -ErrorAction Stop
+    $config = $configContent | ConvertFrom-Json -ErrorAction Stop
+}
+catch {
+    Write-Host "ERROR: Failed to parse configuration file: $_" -ForegroundColor Red
+    Write-Host "Please ensure the configuration file is valid JSON format." -ForegroundColor Yellow
+    pause
+    exit 1
+}
+
+# Validate configuration structure
+if (-not $config.applications) {
+    Write-Host "ERROR: Configuration file does not contain 'applications' property." -ForegroundColor Red
+    pause
+    exit 1
+}
+
+# Filter enabled applications
+$enabledApps = $config.applications | Where-Object { $_.enabled -eq $true }
+
+if ($enabledApps.Count -eq 0) {
+    Write-Host "WARNING: No enabled applications found in configuration file." -ForegroundColor Yellow
+    Write-Host "Please enable at least one application in the configuration file." -ForegroundColor Yellow
+    pause
+    exit 0
+}
+
+# Display installation summary
+Write-Host "`n=====================================" -ForegroundColor Green
+Write-Host "Applications to Install: $($enabledApps.Count)" -ForegroundColor Green
+Write-Host "=====================================" -ForegroundColor Green
+
+foreach ($app in $enabledApps) {
+    Write-Host "  - $($app.name) ($($app.id))" -ForegroundColor Cyan
+}
+
+Write-Host "`nPress any key to start installation..." -ForegroundColor Yellow
+$null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+
+# Install each enabled app silently
+Write-Host "`nStarting installation..." -ForegroundColor Green
+foreach ($app in $enabledApps) {
+    Write-Host "`nInstalling: $($app.name)..." -ForegroundColor Cyan
+    winget install --id $app.id --silent --accept-package-agreements --accept-source-agreements
 }
 
 Write-Host "`nScript completed successfully!" -ForegroundColor Green

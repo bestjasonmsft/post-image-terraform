@@ -1,0 +1,54 @@
+{
+  "applications": [
+    {
+      "id": "Microsoft.PowerShell",
+      "name": "PowerShell",
+      "enabled": true
+    },
+    {
+      "id": "7zip.7zip",
+      "name": "7-Zip",
+      "enabled": true
+    },
+    {
+      "id": "Git.Git",
+      "name": "Git",
+      "enabled": true
+    },
+    {
+      "id": "SublimeHQ.SublimeText.4",
+      "name": "Sublime Text 4",
+      "enabled": true
+    },
+    {
+      "id": "Microsoft.DotNet.SDK.10",
+      "name": ".NET SDK 10",
+      "enabled": true
+    },
+    {
+      "id": "Microsoft.DotNet.SDK.9",
+      "name": ".NET SDK 9",
+      "enabled": true
+    },
+    {
+      "id": "Microsoft.DotNet.SDK.8",
+      "name": ".NET SDK 8",
+      "enabled": true
+    },
+    {
+      "id": "Microsoft.VisualStudioCode",
+      "name": "Visual Studio Code",
+      "enabled": true
+    },
+    {
+      "id": "Microsoft.VisualStudio.2022.Enterprise",
+      "name": "Visual Studio 2022 Enterprise",
+      "enabled": true
+    },
+    {
+      "id": "Microsoft.SQLServerManagementStudio.22",
+      "name": "SQL Server Management Studio 22",
+      "enabled": true
+    }
+  ]
+}
