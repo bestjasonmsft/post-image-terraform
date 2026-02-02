@@ -100,3 +100,65 @@ properties:
       settings:
         id: Microsoft.SQLServerManagementStudio.22
         source: winget
+
+    - resource: PSDscResources/Script
+      id: powerplan
+      directives:
+        description: Set power plan to High Performance
+      settings:
+        GetScript: |
+          $currentPlan = powercfg /getactivescheme
+          return @{ Result = $currentPlan }
+        SetScript: |
+          # Get the GUID for High Performance power plan
+          $highPerfGuid = "8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c"
+          # Set High Performance as the active power scheme
+          powercfg /setactive $highPerfGuid
+        TestScript: |
+          # Get current active scheme
+          $currentScheme = powercfg /getactivescheme
+          # Check if High Performance is active
+          $highPerfGuid = "8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c"
+          return $currentScheme -match $highPerfGuid
+
+    - resource: PSDscResources/Script
+      id: display_timeout_ac
+      directives:
+        description: Set display timeout to 30 minutes on AC power
+      settings:
+        GetScript: |
+          $timeout = powercfg /query SCHEME_CURRENT SUB_VIDEO VIDEOIDLE
+          return @{ Result = $timeout }
+        SetScript: |
+          # Set display timeout to 30 minutes (1800 seconds) on AC power
+          powercfg /change monitor-timeout-ac 30
+        TestScript: |
+          # Get current display timeout on AC
+          $result = powercfg /query SCHEME_CURRENT SUB_VIDEO VIDEOIDLE
+          $acTimeout = ($result | Select-String "Current AC Power Setting Index: 0x([0-9a-f]+)").Matches.Groups[1].Value
+          if ($acTimeout) {
+            $timeoutSeconds = [Convert]::ToInt32($acTimeout, 16)
+            return $timeoutSeconds -eq 1800
+          }
+          return $false
+
+    - resource: PSDscResources/Script
+      id: sleep_timeout_ac
+      directives:
+        description: Set computer sleep to Never on AC power
+      settings:
+        GetScript: |
+          $timeout = powercfg /query SCHEME_CURRENT SUB_SLEEP STANDBYIDLE
+          return @{ Result = $timeout }
+        SetScript: |
+          # Set sleep timeout to Never (0) on AC power
+          powercfg /change standby-timeout-ac 0
+        TestScript: |
+          # Get current sleep timeout on AC
+          $result = powercfg /query SCHEME_CURRENT SUB_SLEEP STANDBYIDLE
+          $acTimeout = ($result | Select-String "Current AC Power Setting Index: 0x([0-9a-f]+)").Matches.Groups[1].Value
+          if ($acTimeout) {
+            $timeoutSeconds = [Convert]::ToInt32($acTimeout, 16)
+            return $timeoutSeconds -eq 0
+          }
+          return $false
