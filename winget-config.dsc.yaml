@@ -135,7 +135,7 @@ properties:
         TestScript: |
           # Get current display timeout on AC
           $result = powercfg /query SCHEME_CURRENT SUB_VIDEO VIDEOIDLE
-          $acTimeout = ($result | Select-String "Current AC Power Setting Index: 0x([0-9a-f]+)").Matches.Groups[1].Value
+          $acTimeout = ($result | Select-String "Current AC Power Setting Index: 0x([0-9a-fA-F]+)").Matches.Groups[1].Value
           if ($acTimeout) {
             $timeoutSeconds = [Convert]::ToInt32($acTimeout, 16)
             return $timeoutSeconds -eq 1800
@@ -156,7 +156,7 @@ properties:
         TestScript: |
           # Get current sleep timeout on AC
           $result = powercfg /query SCHEME_CURRENT SUB_SLEEP STANDBYIDLE
-          $acTimeout = ($result | Select-String "Current AC Power Setting Index: 0x([0-9a-f]+)").Matches.Groups[1].Value
+          $acTimeout = ($result | Select-String "Current AC Power Setting Index: 0x([0-9a-fA-F]+)").Matches.Groups[1].Value
           if ($acTimeout) {
             $timeoutSeconds = [Convert]::ToInt32($acTimeout, 16)
             return $timeoutSeconds -eq 0
