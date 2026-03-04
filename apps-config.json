@@ -54,6 +54,11 @@
       "id": "Microsoft.SQLServerManagementStudio.22",
       "name": "SQL Server Management Studio 22",
       "enabled": true
+    },
+    {
+      "id": "Microsoft.AzureCLI",
+      "name": "Azure CLI",
+      "enabled": true
     }
   ]
 }
