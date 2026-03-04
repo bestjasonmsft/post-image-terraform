@@ -101,6 +101,15 @@ properties:
         id: Microsoft.SQLServerManagementStudio.22
         source: winget
 
+    - resource: Microsoft.WinGet.DSC/WinGetPackage
+      id: azurecli
+      directives:
+        description: Install Azure CLI
+        allowPrerelease: false
+      settings:
+        id: Microsoft.AzureCLI
+        source: winget
+
     - resource: PSDscResources/Script
       id: powerplan
       directives:
